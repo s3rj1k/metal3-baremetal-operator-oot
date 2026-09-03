@@ -17,7 +17,7 @@ spec:
   # Pinned to the BMO commit go.mod records, so the manifests match the operator
   # the plugin is compiled against. Move it with the module pin, not on its own.
   ref:
-    commit: 749628736df765303ac29aadc62268b858b630af
+    commit: 1433bc0126748784a0b47287669c075917b411d5
   timeout: 60s
   url: https://github.com/metal3-io/baremetal-operator
 ---

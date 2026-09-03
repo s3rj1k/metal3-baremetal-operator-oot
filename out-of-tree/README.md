@@ -7,13 +7,14 @@ Nothing discovers hardware and only `live-iso` deploys. RAID, servicing and BMC
 event subscriptions are refused, cleaning and firmware settings are ignored.
 
 ```sh
-make image                              # operator image with the plugin layered in
+make image                              # layer the plugin onto the published BMO release image
+make verify-image                       # prove that image is the release plus the plugin, nothing else
 make compile-check                      # compile only, not loadable
 kubectl apply -f deploy/anaconda.yaml   # operator, caddy, ISO builder
 deploy/bmh-create.sh                    # create one host, idle at available
 deploy/bmh-provision.sh                 # patch in MAC, disk and image, then watch
 deploy/bmh-delete.sh                    # remove the host and everything with it
-hack/retarget-bmo.sh <ref> [repo-url]   # repin BMO, rewrites go.mod, go.sum, Dockerfile, Makefile, deploy
+hack/retarget-bmo.sh <tag> [repo-url]   # repin BMO to a release tag, rewrites go.mod, go.sum, Dockerfile, Makefile, deploy
 ```
 
 ## Demo

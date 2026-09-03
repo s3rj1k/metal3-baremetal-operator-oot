@@ -32,12 +32,22 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    # Builds stock BMO at the pin and the plugin against that source, load tests
-    # the .so, and layers it onto the operator image.
+    # Builds the plugin against BMO source at the pin, load tests the .so, and
+    # layers it onto the published release image rather than a rebuilt operator.
     # Tagged anaconda rather than after the branch, because deploy/anaconda.yaml
     # pins that tag and a deployment reading any other one would not roll.
     - name: Build out of tree anaconda image
       run: make -C out-of-tree image
+      env:
+        REGISTRY: ghcr.io/${{ github.repository_owner }}
+        IMG_TAG: anaconda
+        ARCH: amd64
+
+    # Ahead of the push, so an image carrying anything other than the release
+    # plus our plugin never reaches GHCR. The load test only proves the .so
+    # loads, this proves nothing underneath it was rebuilt or swapped.
+    - name: Verify the image is the published BMO plus the plugin
+      run: make -C out-of-tree verify-image
       env:
         REGISTRY: ghcr.io/${{ github.repository_owner }}
         IMG_TAG: anaconda

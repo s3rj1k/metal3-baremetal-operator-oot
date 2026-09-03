@@ -1,28 +1,20 @@
 # Out of tree anaconda provisioner plugin image.
-# Builds a pinned BMO, builds the plugin against that source, layers it in.
+# Layers the plugin onto the published BMO release image.
 
-ARG BUILD_IMAGE=docker.io/golang:1.26.6@sha256:640a234f4bea3e399c056b7b8f9c667c4939befae8db2f14e9785e16eccd4205
-ARG BASE_IMAGE=gcr.io/distroless/base-debian13:nonroot@sha256:a557d784ac275c287d2bdf3172f47bece8d2a0ef3c0fdefb712e95084a04a562
-ARG BMO_VERSION=749628736df765303ac29aadc62268b858b630af
+ARG BUILD_IMAGE=docker.io/golang:1.26.5@sha256:3aff6657219a4d9c14e27fb1d8976c49c29fddb70ba835014f477e1c70636647
+ARG BMO_IMAGE=quay.io/metal3-io/baremetal-operator:v0.14.0-rc.0@sha256:204e3258a0138aaaf23476ac9dbc70608a9dc07542ca07c71c9026648c1196e9
+ARG BMO_VERSION=v0.14.0-rc.0
 ARG BMO_REPO=https://github.com/metal3-io/baremetal-operator.git
 
-# Fetch the pinned BMO source once. Both the operator build and the plugin build
-# derive from this so they resolve the identical module graph.
+# Fetch the pinned BMO source once. The operator itself is not built here, but
+# the plugin has to compile against this tree to resolve the same module graph.
+# /workspace is not a preference. Go bakes the source path into every package
+# hash, and the release was built there, so any other directory fails to load.
 FROM $BUILD_IMAGE AS bmo-src
 ARG BMO_VERSION
 ARG BMO_REPO
-RUN git clone --depth 1 --branch ${BMO_VERSION} ${BMO_REPO} /bmo 2>/dev/null \
- || (git clone ${BMO_REPO} /bmo && git -C /bmo checkout ${BMO_VERSION})
-
-# Build the stock operator binary and the plugin load tester from the pin.
-FROM bmo-src AS bmo
-ARG ARCH=amd64
-ARG LDFLAGS=-s -w
-ENV CGO_ENABLED=1
-ENV GO111MODULE=on
-WORKDIR /bmo
-RUN GOOS=linux GOARCH=${ARCH} go build -a -ldflags "${LDFLAGS}" -o /out/baremetal-operator main.go \
- && GOOS=linux GOARCH=${ARCH} go build -a -ldflags "${LDFLAGS}" -o /out/plugin-load-test ./cmd/plugin-load-test
+RUN git clone --depth 1 --branch ${BMO_VERSION} ${BMO_REPO} /workspace 2>/dev/null \
+ || (git clone ${BMO_REPO} /workspace && git -C /workspace checkout ${BMO_VERSION})
 
 # Build the plugin against the pinned BMO source. The replaces make it inherit
 # BMO's exact module resolution and add only the gofish dependency.
@@ -35,22 +27,34 @@ ENV CGO_ENABLED=1
 ENV GO111MODULE=on
 WORKDIR /plugin
 COPY . .
-RUN bash ./hack/retarget-bmo.sh "${BMO_VERSION}" "${BMO_REPO}" /bmo \
+RUN bash ./hack/retarget-bmo.sh "${BMO_VERSION}" "${BMO_REPO}" /workspace \
  && GOOS=linux GOARCH=${ARCH} \
     go build -buildmode=plugin -ldflags "${LDFLAGS}" -o /out/anaconda-provisioner.so ./plugin
 
-# Fail the build unless the .so loads into the pinned operator. This is the
-# contract and toolchain gate. The final image copies from here so it always runs.
-FROM bmo AS verify
-COPY --from=plugin /out/anaconda-provisioner.so /plugins/anaconda-provisioner.so
-RUN /out/plugin-load-test /plugins/anaconda-provisioner.so anaconda
+# BMO's own load tester, built from the same checkout and toolchain so it holds
+# the plugin to the module graph the release image was built with.
+RUN cd /workspace && GOOS=linux GOARCH=${ARCH} \
+    go build -a -ldflags "${LDFLAGS}" -o /out/plugin-load-test ./cmd/plugin-load-test
 
-# Runtime image. Stock BMO at the pin plus the layered anaconda plugin. Uses
-# distroless/base (not static) because Go plugins need glibc.
-FROM $BASE_IMAGE
-WORKDIR /
-COPY --from=bmo /out/baremetal-operator .
+# Fail the build unless the .so loads. This is the contract and toolchain gate.
+# The final image copies from here so it always runs.
+FROM $BMO_IMAGE AS verify
+COPY --from=plugin /out/plugin-load-test /plugin-load-test
+COPY --from=plugin /out/anaconda-provisioner.so /plugins/anaconda-provisioner.so
+
+# BMO's own plugin, built by their CI against the release binary. Our loader
+# opening it is what proves this build agrees with the image it layers onto.
+# Exec form, the release image is distroless and has no shell to parse a string.
+RUN ["/plugin-load-test", "/plugins/demo-provisioner.so", "demo"]
+
+# Only meaningful once the line above passes, otherwise both sides are ours and
+# agree with each other while the release binary rejects them both.
+RUN ["/plugin-load-test", "/plugins/anaconda-provisioner.so", "anaconda"]
+
+# Runtime image. The published operator with the anaconda plugin added beside
+# the ironic and demo plugins it already ships.
+FROM $BMO_IMAGE
 COPY --from=verify /plugins/anaconda-provisioner.so /plugins/anaconda-provisioner.so
-USER nonroot:nonroot
-ENTRYPOINT ["/baremetal-operator"]
+# ENTRYPOINT, WORKDIR and USER come from the release image. Only the default
+# provisioner is ours, and the Deployment passes the flag explicitly anyway.
 CMD ["--provisioner", "anaconda"]

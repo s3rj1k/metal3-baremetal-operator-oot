@@ -4,14 +4,13 @@ go 1.26.0
 
 require (
 	github.com/go-logr/logr v1.4.4
-	github.com/metal3-io/baremetal-operator v0.14.0-rc.0.0.20260827071826-749628736df7
-	github.com/metal3-io/baremetal-operator/apis v0.14.0-rc.0.0.20260827071826-749628736df7
-	github.com/metal3-io/baremetal-operator/pkg/hardwareutils v0.14.0-rc.0.0.20260827071826-749628736df7
+	github.com/metal3-io/baremetal-operator v0.14.0-rc.0
+	github.com/metal3-io/baremetal-operator/apis v0.14.0-rc.0
+	github.com/metal3-io/baremetal-operator/pkg/hardwareutils v0.14.0-rc.0
 	github.com/stmcginnis/gofish v0.24.0
 	k8s.io/api v0.36.3
 	k8s.io/apimachinery v0.36.3
 	sigs.k8s.io/controller-runtime v0.24.1
-	sigs.k8s.io/yaml v1.6.0
 )
 
 require (
@@ -51,4 +50,15 @@ require (
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.2 // indirect
+	sigs.k8s.io/yaml v1.6.0 // indirect
 )
+
+replace cloud.google.com/go/compute/metadata => cloud.google.com/go/compute/metadata v0.9.0
+
+replace github.com/golang/protobuf => github.com/golang/protobuf v1.5.4
+
+replace go.yaml.in/yaml/v3 => go.yaml.in/yaml/v3 v3.0.4
+
+replace golang.org/x/tools/go/expect => golang.org/x/tools/go/expect v0.1.1-deprecated
+
+replace k8s.io/gengo/v2 => k8s.io/gengo/v2 v2.0.0-20250922181213-ec3ebc5fd46b
